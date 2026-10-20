@@ -22,8 +22,11 @@ public class DbConnectionTest {
                  DriverManager.getConnection(url, user, password)) {
             System.out.println("SUCCESS: Connected to the cricket database.");
         } catch (SQLException e) {
-            System.err.println("Connection failed: " + e.getMessage());
-            System.exit(1);
+           System.err.println("Connection failed.");
+System.err.println("Error code: " + e.getErrorCode());
+System.err.println("SQL state: " + e.getSQLState());
+System.err.println("Message: " + e.getMessage());
+System.exit(1);
         }
     }
 }
