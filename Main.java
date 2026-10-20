@@ -88,20 +88,27 @@ public class Main {
         }
     }
 
-    private static void addTeam(Connection con, Scanner sc)
-            throws SQLException {
-        System.out.print("New team name: ");
-        String name = sc.nextLine();
+    
+private static void addTeam(Connection con, Scanner sc)
+        throws SQLException {
+    System.out.print("Team name: ");
+    String name = sc.nextLine();
 
-        String sql = "INSERT INTO Teams (team_name) VALUES (?)";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, name);
-            System.out.println("Rows inserted: " + ps.executeUpdate());
-        } catch (SQLException e) {
-            System.out.println("Check the Teams column names: " +
-                               e.getMessage());
-        }
+    System.out.print("Country: ");
+    String country = sc.nextLine();
+
+    String sql =
+        "INSERT INTO Teams (team_name, country) VALUES (?, ?)";
+
+    try (PreparedStatement ps = con.prepareStatement(sql)) {
+        ps.setString(1, name);
+        ps.setString(2, country);
+        System.out.println("Rows inserted: " + ps.executeUpdate());
+    } catch (SQLException e) {
+        System.out.println("Could not add team: " + e.getMessage());
     }
+}
+
 
     private static void updateTeam(Connection con, Scanner sc)
             throws SQLException {
