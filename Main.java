@@ -1,4 +1,3 @@
-```java
 import java.sql.*;
 import java.util.Scanner;
 
@@ -35,10 +34,13 @@ public class Main {
                 System.out.println("8. Get All Teams (Stored Procedure)");
                 System.out.println("9. Update Match Score");
                 System.out.println("10. View Scorecards");
+                System.out.println("11. Add Player");
+                System.out.println("12. View Players by Team");
                 System.out.println("0. Exit");
                 System.out.print("Enter choice: ");
 
                 int choice;
+
                 try {
                     choice = Integer.parseInt(sc.nextLine().trim());
                 } catch (NumberFormatException e) {
@@ -58,6 +60,8 @@ public class Main {
                         case 8 -> getAllTeams(con);
                         case 9 -> updateMatchScore(con, sc);
                         case 10 -> viewScorecards(con);
+                        case 11 -> addPlayer(con, sc);
+                        case 12 -> viewPlayersByTeam(con, sc);
                         case 0 -> {
                             running = false;
                             System.out.println("Goodbye!");
@@ -114,6 +118,11 @@ public class Main {
         System.out.print("Country: ");
         String country = sc.nextLine().trim();
 
+        if (name.isEmpty() || country.isEmpty()) {
+            System.out.println("Team name and country are required.");
+            return;
+        }
+
         String sql =
             "INSERT INTO Teams (team_name, country) VALUES (?, ?)";
 
@@ -135,6 +144,11 @@ public class Main {
         System.out.print("New country: ");
         String country = sc.nextLine().trim();
 
+        if (name.isEmpty() || country.isEmpty()) {
+            System.out.println("Team name and country are required.");
+            return;
+        }
+
         String sql =
             "UPDATE Teams SET team_name = ?, country = ? WHERE team_id = ?";
 
@@ -150,6 +164,14 @@ public class Main {
             throws SQLException {
         System.out.print("Team ID to delete: ");
         int id = Integer.parseInt(sc.nextLine().trim());
+
+        System.out.print("Are you sure? Type YES to delete: ");
+        String confirm = sc.nextLine().trim();
+
+        if (!confirm.equals("YES")) {
+            System.out.println("Deletion cancelled.");
+            return;
+        }
 
         String sql = "DELETE FROM Teams WHERE team_id = ?";
 
@@ -193,6 +215,7 @@ public class Main {
                 "UPDATE Teams SET country = ? WHERE team_id = ?";
 
             int rows;
+
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 ps.setString(1, country);
                 ps.setInt(2, id);
@@ -222,14 +245,17 @@ public class Main {
 
     private static void updateMatchScore(Connection con, Scanner sc)
             throws SQLException {
-        System.out.print("Enter Match ID (1-5): ");
+        System.out.print("Enter Match ID: ");
         int matchId = Integer.parseInt(sc.nextLine().trim());
 
         int team1Id;
         int team2Id;
+        String team1Name;
+        String team2Name;
+        String format;
 
         String check =
-            "SELECT m.team1_id, m.team2_id, " +
+            "SELECT m.team1_id, m.team2_id, m.format, " +
             "t1.team_name AS team1_name, " +
             "t2.team_name AS team2_name " +
             "FROM Matches m " +
@@ -248,13 +274,15 @@ public class Main {
 
                 team1Id = rs.getInt("team1_id");
                 team2Id = rs.getInt("team2_id");
-
-                System.out.println(
-                    "1. " + rs.getString("team1_name"));
-                System.out.println(
-                    "2. " + rs.getString("team2_name"));
+                team1Name = rs.getString("team1_name");
+                team2Name = rs.getString("team2_name");
+                format = rs.getString("format");
             }
         }
+
+        System.out.println("Team 1: " + team1Name);
+        System.out.println("Team 2: " + team2Name);
+        System.out.println("Format: " + format);
 
         System.out.print("Team 1 runs: ");
         int runs1 = Integer.parseInt(sc.nextLine().trim());
@@ -274,18 +302,22 @@ public class Main {
         System.out.print("Team 2 overs: ");
         double overs2 = Double.parseDouble(sc.nextLine().trim());
 
+        double maxOvers = format.equalsIgnoreCase("T20") ? 20 :
+                          format.equalsIgnoreCase("ODI") ? 50 : 999.9;
+
         if (runs1 < 0 || runs2 < 0 ||
             wickets1 < 0 || wickets1 > 10 ||
             wickets2 < 0 || wickets2 > 10 ||
             overs1 < 0 || overs2 < 0 ||
-            overs1 > 999.9 || overs2 > 999.9) {
+            overs1 > maxOvers || overs2 > maxOvers ||
+            !validOvers(overs1) || !validOvers(overs2)) {
             System.out.println("Invalid score details.");
             return;
         }
 
         System.out.println("Winner:");
-        System.out.println("1. Team 1");
-        System.out.println("2. Team 2");
+        System.out.println("1. " + team1Name);
+        System.out.println("2. " + team2Name);
         System.out.println("0. Tie / No result");
         System.out.print("Enter choice: ");
 
@@ -298,15 +330,18 @@ public class Main {
 
         if (winnerChoice == 1 && runs1 < runs2 ||
             winnerChoice == 2 && runs2 < runs1) {
-            System.out.println(
-                "The selected winner has fewer runs. Check the score.");
+            System.out.println("Selected winner has fewer runs.");
             return;
         }
 
-        if (winnerChoice == 1 && runs1 == runs2 ||
-            winnerChoice == 2 && runs1 == runs2) {
+        if (runs1 == runs2 && winnerChoice != 0) {
+            System.out.println("Scores are tied. Select 0.");
+            return;
+        }
+
+        if (runs1 != runs2 && winnerChoice == 0) {
             System.out.println(
-                "Scores are tied. Choose Tie / No result.");
+                "Scores are not tied. Select the winning team.");
             return;
         }
 
@@ -337,6 +372,13 @@ public class Main {
             else
                 System.out.println("No match was updated.");
         }
+    }
+
+    private static boolean validOvers(double overs) {
+        int whole = (int) overs;
+        int balls = (int) Math.round((overs - whole) * 10);
+        return balls >= 0 && balls <= 5 &&
+               Math.abs(overs * 10 - Math.round(overs * 10)) < 0.0001;
     }
 
     private static void viewScorecards(Connection con)
@@ -381,16 +423,88 @@ public class Main {
 
                 String winner = rs.getString("winner_name");
 
-                if (winner == null) {
-                    System.out.println("Result: Not decided / Tie / No result");
-                } else {
+                if (winner == null)
+                    System.out.println("Result: Not decided / No result");
+                else
                     System.out.println("Winner: " + winner);
-                }
             }
 
             if (!found)
                 System.out.println("No matches found.");
         }
     }
+
+    private static void addPlayer(Connection con, Scanner sc)
+            throws SQLException {
+        System.out.print("Player name: ");
+        String name = sc.nextLine().trim();
+
+        System.out.print("Role (Batsman/Bowler/All-rounder/Wicketkeeper): ");
+        String role = sc.nextLine().trim();
+
+        System.out.print("Team ID: ");
+        int teamId = Integer.parseInt(sc.nextLine().trim());
+
+        if (name.isEmpty() || role.isEmpty()) {
+            System.out.println("Player name and role are required.");
+            return;
+        }
+
+        try (PreparedStatement check =
+                 con.prepareStatement(
+                     "SELECT team_id FROM Teams WHERE team_id = ?")) {
+            check.setInt(1, teamId);
+
+            try (ResultSet rs = check.executeQuery()) {
+                if (!rs.next()) {
+                    System.out.println("Team ID does not exist.");
+                    return;
+                }
+            }
+        }
+
+        String sql =
+            "INSERT INTO Players (player_name, role, team_id) " +
+            "VALUES (?, ?, ?)";
+
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, role);
+            ps.setInt(3, teamId);
+            System.out.println("Rows inserted: " + ps.executeUpdate());
+        }
+    }
+
+    private static void viewPlayersByTeam(Connection con, Scanner sc)
+            throws SQLException {
+        System.out.print("Team ID: ");
+        int teamId = Integer.parseInt(sc.nextLine().trim());
+
+        String sql =
+            "SELECT p.player_id, p.player_name, p.role, t.team_name " +
+            "FROM Players p " +
+            "JOIN Teams t ON p.team_id = t.team_id " +
+            "WHERE t.team_id = ? ORDER BY p.player_id";
+
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, teamId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean found = false;
+                System.out.println("ID\tPlayer\tRole\tTeam");
+
+                while (rs.next()) {
+                    found = true;
+                    System.out.println(
+                        rs.getInt("player_id") + "\t" +
+                        rs.getString("player_name") + "\t" +
+                        rs.getString("role") + "\t" +
+                        rs.getString("team_name"));
+                }
+
+                if (!found)
+                    System.out.println("No players found for this team.");
+            }
+        }
+    }
 }
-```
