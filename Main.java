@@ -3,8 +3,8 @@ import java.sql.*;
 import java.util.Scanner;
 
 public class Main {
-    private static final String URL =
-        "jdbc:mysql://sql.freedb.tech:3306/freedb_Yza4PvyW";
+   private static final String URL =
+    "jdbc:mysql://sql.freedb.tech:3306/freedb_Yza4PyvW";
     private static final String USER = "u_rs4QKT";
 
     public static void main(String[] args) {
@@ -110,24 +110,29 @@ private static void addTeam(Connection con, Scanner sc)
 }
 
 
-    private static void updateTeam(Connection con, Scanner sc)
-            throws SQLException {
-        System.out.print("Team ID: ");
-        int id = Integer.parseInt(sc.nextLine());
-        System.out.print("New team name: ");
-        String name = sc.nextLine();
+  
+private static void updateTeam(Connection con, Scanner sc)
+        throws SQLException {
+    System.out.print("Team ID: ");
+    int id = Integer.parseInt(sc.nextLine());
 
-        String sql =
-            "UPDATE Teams SET team_name = ? WHERE team_id = ?";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, name);
-            ps.setInt(2, id);
-            System.out.println("Rows updated: " + ps.executeUpdate());
-        } catch (SQLException e) {
-            System.out.println("Check the Teams column names: " +
-                               e.getMessage());
-        }
+    System.out.print("New team name: ");
+    String name = sc.nextLine();
+
+    System.out.print("New country: ");
+    String country = sc.nextLine();
+
+    String sql =
+        "UPDATE Teams SET team_name = ?, country = ? WHERE team_id = ?";
+
+    try (PreparedStatement ps = con.prepareStatement(sql)) {
+        ps.setString(1, name);
+        ps.setString(2, country);
+        ps.setInt(3, id);
+        System.out.println("Rows updated: " + ps.executeUpdate());
     }
+}
+
 
     private static void deleteTeam(Connection con, Scanner sc)
             throws SQLException {
@@ -144,22 +149,42 @@ private static void addTeam(Connection con, Scanner sc)
         }
     }
 
-    private static void transactionDemo(Connection con)
-            throws SQLException {
-        boolean oldAutoCommit = con.getAutoCommit();
-        try {
-            con.setAutoCommit(false);
-            try (Statement st = con.createStatement()) {
-                st.executeUpdate(
-                    "UPDATE Teams SET team_name = team_name WHERE 1 = 0");
+  
+private static void transactionDemo(Connection con)
+        throws SQLException {
+    Scanner sc = new Scanner(System.in);
+
+    System.out.print("Team ID to update: ");
+    int id = Integer.parseInt(sc.nextLine());
+
+    System.out.print("New country: ");
+    String country = sc.nextLine();
+
+    boolean oldAutoCommit = con.getAutoCommit();
+
+    try {
+        con.setAutoCommit(false);
+
+        String sql = "UPDATE Teams SET country = ? WHERE team_id = ?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, country);
+            ps.setInt(2, id);
+
+            int rows = ps.executeUpdate();
+
+            if (rows == 0) {
+                con.rollback();
+                System.out.println("No matching team. Transaction rolled back.");
+            } else {
+                con.commit();
+                System.out.println("Transaction committed. Rows updated: " + rows);
             }
-            con.commit();
-            System.out.println("Transaction committed successfully.");
-        } catch (SQLException e) {
-            con.rollback();
-            System.out.println("Transaction rolled back: " + e.getMessage());
-        } finally {
-            con.setAutoCommit(oldAutoCommit);
         }
+    } catch (SQLException e) {
+        con.rollback();
+        System.out.println("Transaction rolled back: " + e.getMessage());
+    } finally {
+        con.setAutoCommit(oldAutoCommit);
     }
 }
+
