@@ -285,4 +285,24 @@ public class Main {
             }
         }
     }
+    
+private static void getAllTeams(Connection con)
+        throws SQLException {
+    String sql = "{CALL GetAllTeams()}";
+
+    try (CallableStatement cs = con.prepareCall(sql);
+         ResultSet rs = cs.executeQuery()) {
+
+        System.out.println("ID\tTeam Name\tCountry");
+
+        while (rs.next()) {
+            System.out.println(
+                rs.getInt("team_id") + "\t" +
+                rs.getString("team_name") + "\t" +
+                rs.getString("country")
+            );
+        }
+    }
+}
+
 }
