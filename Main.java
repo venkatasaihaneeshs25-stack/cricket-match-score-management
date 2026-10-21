@@ -12,7 +12,8 @@ public class Main {
         String password = System.getenv("DB_PASSWORD");
 
         if (password == null || password.isBlank()) {
-            System.out.println("Configure DB_PASSWORD before running.");
+            System.out.println("Configure the DB_PASSWORD environment variable.");
+            sc.close();
             return;
         }
 
@@ -20,7 +21,8 @@ public class Main {
                  DriverManager.getConnection(URL, USER, password)) {
             System.out.println("Connected to Cricket Score Database!");
 
-            while (true) {
+            boolean running = true;
+            while (running) {
                 System.out.println("\n=== CRICKET MATCH SCORE MANAGEMENT ===");
                 System.out.println("1. View Teams");
                 System.out.println("2. View Players");
@@ -28,18 +30,14 @@ public class Main {
                 System.out.println("4. Add Team");
                 System.out.println("5. Update Team");
                 System.out.println("6. Delete Team");
-                System.out.println("7. Add Player");
-                System.out.println("8. Update Player");
-                System.out.println("9. Delete Player");
-                System.out.println("10. Add Match");
-                System.out.println("11. Transaction Demo");
-                System.out.println("12. Call Stored Procedure");
+                System.out.println("7. Transaction Demo");
+                System.out.println("8. Get All Teams (Stored Procedure)");
                 System.out.println("0. Exit");
-                System.out.print("Choice: ");
+                System.out.print("Enter choice: ");
 
                 int choice;
                 try {
-                    choice = Integer.parseInt(sc.nextLine());
+                    choice = Integer.parseInt(sc.nextLine().trim());
                 } catch (NumberFormatException e) {
                     System.out.println("Enter a valid number.");
                     continue;
@@ -53,28 +51,24 @@ public class Main {
                         case 4 -> addTeam(con, sc);
                         case 5 -> updateTeam(con, sc);
                         case 6 -> deleteTeam(con, sc);
-                        case 7 -> addPlayer(con, sc);
-                        case 8 -> updatePlayer(con, sc);
-                        case 9 -> deletePlayer(con, sc);
-                        case 10 -> addMatch(con, sc);
-                        case 11 -> transactionDemo(con, sc);
-                        case 12 -> callStoredProcedure(con);
+                        case 7 -> transactionDemo(con, sc);
+                        case 8 -> getAllTeams(con);
                         case 0 -> {
+                            running = false;
                             System.out.println("Goodbye!");
-                            return;
                         }
                         default -> System.out.println("Invalid choice.");
                     }
                 } catch (SQLException e) {
-                    System.out.println("Database operation failed: "
-                                       + e.getMessage());
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Invalid input: " + e.getMessage());
+                    System.out.println("Operation failed: " + e.getMessage());
+                } catch (NumberFormatException e) {
+                    System.out.println("Please enter a valid numeric ID.");
                 }
             }
         } catch (SQLException e) {
-            System.out.println("Database connection failed: "
-                               + e.getMessage());
+            System.out.println("Database connection failed: " + e.getMessage());
+            System.out.println("SQL state: " + e.getSQLState());
+            System.out.println("Error code: " + e.getErrorCode());
         } finally {
             sc.close();
         }
@@ -82,9 +76,11 @@ public class Main {
 
     private static void viewTable(Connection con, String table)
             throws SQLException {
-        if (!table.equals("Teams") && !table.equals("Players")
-                && !table.equals("Matches")) {
-            throw new IllegalArgumentException("Unknown table.");
+        // Table names are selected only from this allowlist.
+        if (!table.equals("Teams") &&
+            !table.equals("Players") &&
+            !table.equals("Matches")) {
+            throw new IllegalArgumentException("Invalid table name.");
         }
 
         String sql = "SELECT * FROM " + table + " LIMIT 100";
@@ -108,9 +104,9 @@ public class Main {
     private static void addTeam(Connection con, Scanner sc)
             throws SQLException {
         System.out.print("Team name: ");
-        String name = sc.nextLine();
+        String name = sc.nextLine().trim();
         System.out.print("Country: ");
-        String country = sc.nextLine();
+        String country = sc.nextLine().trim();
 
         String sql =
             "INSERT INTO Teams (team_name, country) VALUES (?, ?)";
@@ -124,11 +120,11 @@ public class Main {
     private static void updateTeam(Connection con, Scanner sc)
             throws SQLException {
         System.out.print("Team ID: ");
-        int id = Integer.parseInt(sc.nextLine());
+        int id = Integer.parseInt(sc.nextLine().trim());
         System.out.print("New team name: ");
-        String name = sc.nextLine();
+        String name = sc.nextLine().trim();
         System.out.print("New country: ");
-        String country = sc.nextLine();
+        String country = sc.nextLine().trim();
 
         String sql =
             "UPDATE Teams SET team_name = ?, country = ? WHERE team_id = ?";
@@ -143,7 +139,7 @@ public class Main {
     private static void deleteTeam(Connection con, Scanner sc)
             throws SQLException {
         System.out.print("Team ID to delete: ");
-        int id = Integer.parseInt(sc.nextLine());
+        int id = Integer.parseInt(sc.nextLine().trim());
 
         String sql = "DELETE FROM Teams WHERE team_id = ?";
         try (PreparedStatement ps = con.prepareStatement(sql)) {
@@ -152,157 +148,59 @@ public class Main {
         }
     }
 
-    private static void addPlayer(Connection con, Scanner sc)
+    private static void getAllTeams(Connection con)
             throws SQLException {
-        System.out.print("Player name: ");
-        String name = sc.nextLine();
-        System.out.print("Role: ");
-        String role = sc.nextLine();
-        System.out.print("Team ID: ");
-        int teamId = Integer.parseInt(sc.nextLine());
+        try (CallableStatement cs = con.prepareCall("{CALL GetAllTeams()}");
+             ResultSet rs = cs.executeQuery()) {
+            System.out.println("\n--- ALL TEAMS ---");
+            System.out.println("ID\tTeam Name\tCountry");
 
-        String sql =
-            "INSERT INTO Players (player_name, role, team_id) VALUES (?, ?, ?)";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, name);
-            ps.setString(2, role);
-            ps.setInt(3, teamId);
-            System.out.println("Rows inserted: " + ps.executeUpdate());
-        }
-    }
-
-    private static void updatePlayer(Connection con, Scanner sc)
-            throws SQLException {
-        System.out.print("Player ID: ");
-        int id = Integer.parseInt(sc.nextLine());
-        System.out.print("New player name: ");
-        String name = sc.nextLine();
-        System.out.print("New role: ");
-        String role = sc.nextLine();
-        System.out.print("New team ID: ");
-        int teamId = Integer.parseInt(sc.nextLine());
-
-        String sql =
-            "UPDATE Players SET player_name = ?, role = ?, team_id = ? WHERE player_id = ?";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, name);
-            ps.setString(2, role);
-            ps.setInt(3, teamId);
-            ps.setInt(4, id);
-            System.out.println("Rows updated: " + ps.executeUpdate());
-        }
-    }
-
-    private static void deletePlayer(Connection con, Scanner sc)
-            throws SQLException {
-        System.out.print("Player ID to delete: ");
-        int id = Integer.parseInt(sc.nextLine());
-
-        String sql = "DELETE FROM Players WHERE player_id = ?";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            System.out.println("Rows deleted: " + ps.executeUpdate());
-        }
-    }
-
-    private static void addMatch(Connection con, Scanner sc)
-            throws SQLException {
-        System.out.print("Team 1 ID: ");
-        int team1 = Integer.parseInt(sc.nextLine());
-        System.out.print("Team 2 ID: ");
-        int team2 = Integer.parseInt(sc.nextLine());
-        if (team1 == team2) {
-            System.out.println("Choose two different teams.");
-            return;
-        }
-
-        System.out.print("Match date (YYYY-MM-DD): ");
-        Date date = Date.valueOf(sc.nextLine());
-        System.out.print("Venue: ");
-        String venue = sc.nextLine();
-        System.out.print("Format: ");
-        String format = sc.nextLine();
-
-        String sql =
-            "INSERT INTO Matches (team1_id, team2_id, match_date, venue, `format`) VALUES (?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, team1);
-            ps.setInt(2, team2);
-            ps.setDate(3, date);
-            ps.setString(4, venue);
-            ps.setString(5, format);
-            System.out.println("Rows inserted: " + ps.executeUpdate());
+            while (rs.next()) {
+                System.out.println(
+                    rs.getInt("team_id") + "\t" +
+                    rs.getString("team_name") + "\t" +
+                    rs.getString("country"));
+            }
         }
     }
 
     private static void transactionDemo(Connection con, Scanner sc)
             throws SQLException {
         System.out.print("Team ID to update: ");
-        int id = Integer.parseInt(sc.nextLine());
+        int id = Integer.parseInt(sc.nextLine().trim());
         System.out.print("New country: ");
-        String country = sc.nextLine();
+        String country = sc.nextLine().trim();
 
         boolean oldAutoCommit = con.getAutoCommit();
+
         try {
             con.setAutoCommit(false);
+
             String sql = "UPDATE Teams SET country = ? WHERE team_id = ?";
+            int rows;
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 ps.setString(1, country);
                 ps.setInt(2, id);
-                int rows = ps.executeUpdate();
+                rows = ps.executeUpdate();
+            }
 
-                if (rows == 0) {
-                    con.rollback();
-                    System.out.println("No matching team. Rolled back.");
-                } else {
-                    con.commit();
-                    System.out.println("Transaction committed. Rows: " + rows);
-                }
+            if (rows == 0) {
+                con.rollback();
+                System.out.println("No matching team. Transaction rolled back.");
+            } else {
+                con.commit();
+                System.out.println(
+                    "Transaction committed. Rows updated: " + rows);
             }
         } catch (SQLException e) {
-            con.rollback();
+            try {
+                con.rollback();
+            } catch (SQLException rollbackError) {
+                e.addSuppressed(rollbackError);
+            }
             throw e;
         } finally {
             con.setAutoCommit(oldAutoCommit);
         }
     }
-
-    private static void callStoredProcedure(Connection con)
-            throws SQLException {
-        // Create the procedure in phpMyAdmin before choosing menu option 12.
-        try (CallableStatement cs =
-                 con.prepareCall("{CALL GetAllTeams()}")) {
-            boolean hasResults = cs.execute();
-            if (hasResults) {
-                try (ResultSet rs = cs.getResultSet()) {
-                    while (rs.next()) {
-                        System.out.println(
-                            rs.getInt("team_id") + " | " +
-                            rs.getString("team_name") + " | " +
-                            rs.getString("country"));
-                    }
-                }
-            }
-        }
-    }
-    
-private static void getAllTeams(Connection con)
-        throws SQLException {
-    String sql = "{CALL GetAllTeams()}";
-
-    try (CallableStatement cs = con.prepareCall(sql);
-         ResultSet rs = cs.executeQuery()) {
-
-        System.out.println("ID\tTeam Name\tCountry");
-
-        while (rs.next()) {
-            System.out.println(
-                rs.getInt("team_id") + "\t" +
-                rs.getString("team_name") + "\t" +
-                rs.getString("country")
-            );
-        }
-    }
-}
-
 }
